@@ -1,0 +1,219 @@
+package storage
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/bakkerme/ai-news-auditability-service/internal/models"
+	"github.com/dgraph-io/badger/v3"
+)
+
+var db *badger.DB
+
+const (
+	dbPathPrefix = "badger"
+	runDataDir   = "rundata"
+)
+
+// InitDB initializes the BadgerDB database.
+// It creates the database directory if it doesn't exist.
+// It also sets up a goroutine for garbage collection.
+func InitDB(basePath string) error {
+	dbDir := filepath.Join(basePath, dbPathPrefix)
+	if err := os.MkdirAll(dbDir, 0777); err != nil {
+		return fmt.Errorf("failed to create database directory %s: %w", dbDir, err)
+	}
+
+	opts := badger.DefaultOptions(dbDir)
+	opts.Logger = nil // Disable Badger's default logger to avoid noise; we'll log errors ourselves.
+
+	var err error
+	db, err = badger.Open(opts)
+	if err != nil {
+		return fmt.Errorf("failed to open badger database: %w", err)
+	}
+
+	// Run GC periodically
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+		again:
+			err := db.RunValueLogGC(0.7)
+			if err == nil {
+				goto again
+			} else if err != badger.ErrNoRewrite {
+				log.Printf("Error during BadgerDB GC: %v", err)
+			}
+		}
+	}()
+
+	log.Println("BadgerDB initialized successfully at", dbDir)
+	return nil
+}
+
+// CloseDB closes the BadgerDB database.
+func CloseDB() {
+	if db != nil {
+		if err := db.Close(); err != nil {
+			log.Printf("Error closing BadgerDB: %v", err)
+		} else {
+			log.Println("BadgerDB closed successfully.")
+		}
+	}
+}
+
+// getRunDBKeyPrefix returns the path for storing run data.
+// For now, we store all runs under a common prefix.
+// We could extend this to use subdirectories if needed (e.g., by date).
+func getRunDBKeyPrefix() []byte {
+	return []byte(runDataDir + "/")
+}
+
+// SaveRunData saves the provided RunData to BadgerDB.
+// The runID is used as the key.
+func SaveRunData(runID string, data models.PersistedRunData) error {
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	key := []byte(filepath.Join(runDataDir, runID))
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal run data to JSON: %w", err)
+	}
+
+	err = db.Update(func(txn *badger.Txn) error {
+		return txn.Set(key, jsonData)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to save run data (ID: %s) to BadgerDB: %w", runID, err)
+	}
+	log.Printf("Successfully saved run data with ID: %s", runID)
+	return nil
+}
+
+// GetRunData retrieves RunData from BadgerDB by its ID.
+func GetRunData(runID string) (*models.PersistedRunData, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	key := []byte(filepath.Join(runDataDir, runID))
+	var runData models.PersistedRunData
+
+	err := db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		if err != nil {
+			if err == badger.ErrKeyNotFound {
+				return fmt.Errorf("run data with ID '%s' not found: %w", runID, err)
+			}
+			return fmt.Errorf("failed to get run data (ID: %s) from BadgerDB: %w", runID, err)
+		}
+
+		val, err := item.ValueCopy(nil)
+		if err != nil {
+			return fmt.Errorf("failed to copy value for run data (ID: %s): %w", runID, err)
+		}
+
+		if err := json.Unmarshal(val, &runData); err != nil {
+			return fmt.Errorf("failed to unmarshal run data (ID: %s) from JSON: %w", runID, err)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err // Error already contains specific details
+	}
+	return &runData, nil
+}
+
+// ListRunMetadata retrieves a list of RunMetadata from BadgerDB.
+// This is a basic implementation that iterates over keys with the runDataDir prefix.
+// For production, consider pagination and more efficient querying/indexing if performance becomes an issue.
+func ListRunMetadata(limit int) ([]models.RunMetadata, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	var runs []models.RunMetadata
+	keyPrefix := getRunDBKeyPrefix()
+
+	err := db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+
+		count := 0
+		for it.Seek(keyPrefix); it.ValidForPrefix(keyPrefix); it.Next() {
+			if limit > 0 && count >= limit {
+				break
+			}
+			item := it.Item()
+			err := item.Value(func(val []byte) error {
+				var runData models.PersistedRunData
+				// We need to unmarshal the full RunData to get metadata.
+				// If performance is critical and RunData objects are large,
+				// consider storing metadata separately or in a more queryable format.
+				if err := json.Unmarshal(val, &runData); err != nil {
+					// Log error but try to continue if possible, or return error to stop.
+					log.Printf("Error unmarshalling RunData for key %s: %v", string(item.Key()), err)
+					return nil // Skip this item
+				}
+
+				// Construct RunMetadata from RunData
+				// The RunID for metadata should be the key used in the DB (without prefix)
+				dbKey := string(item.Key())
+				runIDInDB := filepath.Base(dbKey)
+
+				meta := models.RunMetadata{
+					ID:          runIDInDB, // Use the actual DB key part
+					RunDate:     runData.RunDate,
+					PersonaName: runData.Persona.Name,
+					// Model field was removed from RunMetadata, so not setting it.
+				}
+				runs = append(runs, meta)
+				count++
+				return nil
+			})
+			if err != nil {
+				return fmt.Errorf("error processing item value: %w", err)
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to list run metadata from BadgerDB: %w", err)
+	}
+	return runs, nil
+}
+
+// DeleteRunData deletes RunData from BadgerDB by its ID.
+func DeleteRunData(runID string) error {
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	key := []byte(filepath.Join(runDataDir, runID))
+
+	err := db.Update(func(txn *badger.Txn) error {
+		err := txn.Delete(key)
+		if err == badger.ErrKeyNotFound {
+			// Consider whether to return an error or not if key doesn't exist
+			log.Printf("Attempted to delete non-existent run data with ID: %s", runID)
+			return nil // Or return an error indicating not found
+		}
+		return err
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to delete run data (ID: %s) from BadgerDB: %w", runID, err)
+	}
+	log.Printf("Successfully deleted run data with ID (if it existed): %s", runID)
+	return nil
+}

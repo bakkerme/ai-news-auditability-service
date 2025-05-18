@@ -1,0 +1,839 @@
+openapi: 3.0.0
+info:
+  title: AI News Auditability Service API
+  description: API for collecting, storing, and analyzing LLM outputs from AI News Processor
+  version: 0.1.0
+
+servers:
+  - url: https://api.ainews-audit.example.com/v1
+    description: Production server
+  - url: http://localhost:8080/v1
+    description: Local development server
+
+paths:
+  /runs:
+    post:
+      summary: Submit run data
+      description: Submit run data from AI News Processor for storage and analysis
+      operationId: submitRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunData'
+      responses:
+        '201':
+          description: Run data successfully received
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResponse'
+        '400':
+          description: Invalid run data format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: List runs
+      description: Get a list of all runs with basic metadata
+      operationId: listRuns
+      parameters:
+        - name: persona
+          in: query
+          description: Filter runs by persona name
+          required: false
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: Filter runs after this timestamp (ISO 8601)
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Filter runs before this timestamp (ISO 8601)
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: List of runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RunMetadata'
+
+  /runs/{runId}:
+    get:
+      summary: Get run data
+      description: Get the full run data for a specific run
+      operationId: getRun
+      parameters:
+        - name: runId
+          in: path
+          description: ID of the run
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Run data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunData'
+        '404':
+          description: Run not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /benchmarks/create/{runId}:
+    post:
+      summary: Create new benchmark
+      description: Trigger creation of a new benchmark evaluation for a specific run
+      operationId: createBenchmark
+      parameters:
+        - name: runId
+          in: path
+          description: ID of the run to evaluate
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Benchmark triggered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BenchmarkResponse'
+        '404':
+          description: Run not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /benchmarks/{runId}:
+    get:
+      summary: Get benchmark results
+      description: Get benchmark evaluation results for a specific run
+      operationId: getBenchmark
+      parameters:
+        - name: runId
+          in: path
+          description: ID of the run
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Benchmark results retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BenchmarkResults'
+        '404':
+          description: Benchmark not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /benchmarks/{runId}/logs:
+    get:
+      summary: Get benchmark logs
+      description: Get logs for a specific benchmark evaluation
+      operationId: getBenchmarkLogs
+      parameters:
+        - name: runId
+          in: path
+          description: ID of the run
+          required: true
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: Filter logs after this timestamp (ISO 8601)
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Filter logs before this timestamp (ISO 8601)
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: level
+          in: query
+          description: Filter logs by minimum level
+          required: false
+          schema:
+            type: string
+            enum: [debug, info, warn, error]
+      responses:
+        '200':
+          description: Benchmark logs retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LogEntry'
+        '404':
+          description: Benchmark not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /benchmarks/{runId}/logs/stream:
+    get:
+      summary: Stream benchmark logs (WebSocket)
+      description: |
+        Establishes a WebSocket connection to stream real-time logs during benchmark evaluation.
+        
+        Connection URL format: `ws://{baseUrl}/benchmarks/{runId}/logs/stream`
+        
+        The server will send log messages in JSON format as defined by the LogEntry schema.
+        
+        The connection will remain open until the benchmark completes or fails, at which point
+        the server will send a final message with type "complete" or "error" and close the connection.
+      operationId: streamBenchmarkLogs
+      parameters:
+        - name: runId
+          in: path
+          description: ID of the run
+          required: true
+          schema:
+            type: string
+      responses:
+        '101':
+          description: Switching Protocols to WebSocket
+        '404':
+          description: Benchmark not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /metrics/persona/{personaName}:
+    get:
+      summary: Get metrics by persona
+      description: Get historical metrics for a specific persona
+      operationId: getPersonaMetrics
+      parameters:
+        - name: personaName
+          in: path
+          description: Name of the persona
+          required: true
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: Filter metrics after this timestamp (ISO 8601)
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Filter metrics before this timestamp (ISO 8601)
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonaMetrics'
+        '404':
+          description: Persona not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /metrics/quality:
+    get:
+      summary: Get quality metrics over time
+      description: Get quality metrics over time for all or specific personas
+      operationId: getQualityMetrics
+      parameters:
+        - name: persona
+          in: query
+          description: Filter metrics by persona name
+          required: false
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: Filter metrics after this timestamp (ISO 8601)
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Filter metrics before this timestamp (ISO 8601)
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Quality metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualityMetrics'
+
+components:
+  schemas:
+    RunData:
+      type: object
+      required:
+        - entrySummaries
+        - persona
+        - runDate
+      properties:
+        entrySummaries:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntrySummary'
+          description: Overall input-output pairs for entire pipeline
+        imageSummaries:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImageSummary'
+          description: Image URL to description data
+        webContentSummaries:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebContentSummary'
+          description: URL to summary data
+        persona:
+          $ref: '#/components/schemas/Persona'
+          description: The full persona used for this run
+        runDate:
+          type: string
+          format: date-time
+          description: The date the run was executed
+        overallModelUsed:
+          type: string
+          description: The LLM model used for the run
+        imageModelUsed:
+          type: string
+          description: The LLM model used for the image processing
+        webContentModelUsed:
+          type: string
+          description: The LLM model used for the web content processing
+        totalProcessingTime:
+          type: integer
+          description: Total time taken for processing in milliseconds
+        entryTotalProcessingTime:
+          type: integer
+          description: Total time taken for entry processing in milliseconds
+        imageTotalProcessingTime:
+          type: integer
+          description: Total time taken for image processing in milliseconds
+        webContentTotalProcessingTime:
+          type: integer
+          description: Total time taken for web content processing in milliseconds
+        successRate:
+          type: number
+          format: float
+          description: Percentage of successful processing attempts
+
+    EntrySummary:
+      type: object
+      required:
+        - rawInput
+        - results
+        - processingTime
+      properties:
+        rawInput:
+          type: string
+          description: The raw input strings sent to the LLM
+        results:
+          $ref: '#/components/schemas/Item'
+          description: The processed results from the LLM
+        processingTime:
+          type: integer
+          description: Time taken to process the entry in milliseconds
+
+    ImageSummary:
+      type: object
+      required:
+        - imageURL
+        - imageDescription
+        - processingTime
+      properties:
+        imageURL:
+          type: string
+          description: URL of the image processed
+        imageDescription:
+          type: string
+          description: The description generated for the image
+        title:
+          type: string
+          description: Title associated with the image
+        entryID:
+          type: string
+          description: ID of the entry the image belongs to
+        processingTime:
+          type: integer
+          description: Time taken to process the image in milliseconds
+
+    WebContentSummary:
+      type: object
+      required:
+        - url
+        - originalContent
+        - summary
+        - processingTime
+      properties:
+        url:
+          type: string
+          description: URL of the web content
+        originalContent:
+          type: string
+          description: Original content from the URL
+        summary:
+          type: string
+          description: Summary generated for the web content
+        title:
+          type: string
+          description: Title of the web content
+        entryID:
+          type: string
+          description: ID of the entry the web content belongs to
+        processingTime:
+          type: integer
+          description: Time taken to process the web content in milliseconds
+
+    Item:
+      type: object
+      required:
+        - id
+        - title
+        - summary
+        - isRelevant
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the item
+        title:
+          type: string
+          description: Title of the item
+        summary:
+          type: string
+          description: Generated summary of the content
+        commentSummary:
+          type: string
+          description: Summary of comments on the content
+        isRelevant:
+          type: boolean
+          description: Whether the item is relevant to the persona
+
+    Persona:
+      type: object
+      required:
+        - name
+        - focusAreas
+      properties:
+        name:
+          type: string
+          description: Name of the persona
+        identity:
+          type: string
+          description: Identity description of the persona
+        focusAreas:
+          type: array
+          items:
+            type: string
+          description: Areas of focus for the persona
+        exclusionCriteria:
+          type: array
+          items:
+            type: string
+          description: Criteria for excluding content
+
+    RunResponse:
+      type: object
+      required:
+        - id
+        - status
+        - message
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the run submission
+        status:
+          type: string
+          enum: [received, processing, completed, failed]
+          description: Status of the run submission
+        message:
+          type: string
+          description: Additional information about the run submission
+
+    RunMetadata:
+      type: object
+      required:
+        - id
+        - personaName
+        - runDate
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the processing run
+        personaName:
+          type: string
+          description: Name of the persona used for the run
+        runDate:
+          type: string
+          format: date-time
+          description: The date the run was executed
+        overallModelUsed:
+          type: string
+          description: The LLM model used for the run
+        totalItems:
+          type: integer
+          description: Total number of items in the run
+        hasBenchmark:
+          type: boolean
+          description: Whether the run has been benchmarked
+
+    BenchmarkResponse:
+      type: object
+      required:
+        - id
+        - status
+        - message
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the benchmark
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+          description: Status of the benchmark
+        message:
+          type: string
+          description: Additional information about the benchmark
+        estimatedCompletionTime:
+          type: string
+          format: date-time
+          description: Estimated time of completion for the benchmark
+
+    BenchmarkResults:
+      type: object
+      required:
+        - totalItems
+        - relevanceAccuracy
+        - qualityScore
+        - detailedEvaluations
+        - personaName
+        - personaFocusAreas
+      properties:
+        totalItems:
+          type: integer
+          description: Total number of items evaluated
+        relevanceAccuracy:
+          type: number
+          format: float
+          description: Accuracy of relevance classification
+        qualityScore:
+          type: number
+          format: float
+          description: Overall quality score
+        detailedEvaluations:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/EvaluationResult'
+          description: Map of item ID to detailed evaluation
+        personaName:
+          type: string
+          description: Name of the persona
+        personaFocusAreas:
+          type: array
+          items:
+            type: string
+          description: Focus areas of the persona
+        missingItems:
+          type: array
+          items:
+            type: string
+          description: IDs of items that were missing from the results
+
+    EvaluationResult:
+      type: object
+      required:
+        - qualityRating
+        - qualityExplanation
+        - relevanceCorrect
+        - relevanceExplanation
+      properties:
+        qualityRating:
+          type: string
+          enum: [Excellent, Good, Fair, Poor]
+          description: Descriptive rating for summary quality
+        qualityExplanation:
+          type: string
+          description: Detailed explanation of the rating
+        relevanceCorrect:
+          type: boolean
+          description: Whether IsRelevant flag was set correctly
+        relevanceExplanation:
+          type: string
+          description: Explanation of relevance assessment
+
+    LogEntry:
+      type: object
+      required:
+        - timestamp
+        - level
+        - message
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: Time when the log entry was created
+        level:
+          type: string
+          enum: [debug, info, warn, error]
+          description: Severity level of the log entry
+        message:
+          type: string
+          description: Log message content
+        itemId:
+          type: string
+          description: ID of the item being processed, if applicable
+        phase:
+          type: string
+          description: Current benchmark phase (e.g., "initialization", "evaluation", "calculation")
+        progress:
+          type: object
+          properties:
+            current:
+              type: integer
+              description: Current item being processed
+            total:
+              type: integer
+              description: Total items to process
+          description: Progress information, if applicable
+        type:
+          type: string
+          enum: [log, progress, status, complete, error]
+          description: Type of log message, used for websocket categorization
+
+    WebSocketMessage:
+      type: object
+      required:
+        - type
+        - data
+      properties:
+        type:
+          type: string
+          enum: [log, progress, status, complete, error]
+          description: Type of message sent over WebSocket
+        data:
+          oneOf:
+            - $ref: '#/components/schemas/LogEntry'
+            - $ref: '#/components/schemas/BenchmarkProgress'
+            - $ref: '#/components/schemas/BenchmarkStatus'
+            - $ref: '#/components/schemas/BenchmarkComplete'
+            - $ref: '#/components/schemas/BenchmarkError'
+          description: Message payload based on the type
+
+    BenchmarkProgress:
+      type: object
+      required:
+        - current
+        - total
+        - phase
+      properties:
+        current:
+          type: integer
+          description: Current item being processed
+        total:
+          type: integer
+          description: Total items to process
+        phase:
+          type: string
+          description: Current benchmark phase
+        percentage:
+          type: number
+          format: float
+          description: Completion percentage
+        itemId:
+          type: string
+          description: ID of the current item being processed
+
+    BenchmarkStatus:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum: [queued, initializing, processing, calculating, finalizing, completed]
+          description: Current status of the benchmark
+        timestamp:
+          type: string
+          format: date-time
+          description: Time of status update
+        message:
+          type: string
+          description: Additional status message
+        estimatedRemaining:
+          type: integer
+          description: Estimated remaining time in seconds
+
+    BenchmarkComplete:
+      type: object
+      required:
+        - runId
+        - success
+        - message
+      properties:
+        runId:
+          type: string
+          description: ID of the run that was benchmarked
+        success:
+          type: boolean
+          description: Whether the benchmark completed successfully
+        message:
+          type: string
+          description: Completion message
+        duration:
+          type: integer
+          description: Total duration in seconds
+        resultsUrl:
+          type: string
+          description: URL to the full benchmark results
+
+    BenchmarkError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Error message
+        details:
+          type: string
+          description: Additional error details
+
+    PersonaMetrics:
+      type: object
+      required:
+        - personaName
+        - runs
+      properties:
+        personaName:
+          type: string
+          description: Name of the persona
+        runs:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricPoint'
+          description: Historical run metrics
+        averageQualityScore:
+          type: number
+          format: float
+          description: Average quality score across all runs
+        averageRelevanceAccuracy:
+          type: number
+          format: float
+          description: Average relevance accuracy across all runs
+
+    QualityMetrics:
+      type: object
+      required:
+        - metrics
+      properties:
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/PersonaMetricPoint'
+          description: Quality metrics over time for each persona
+
+    MetricPoint:
+      type: object
+      required:
+        - runId
+        - date
+        - qualityScore
+        - relevanceAccuracy
+      properties:
+        runId:
+          type: string
+          description: ID of the run
+        date:
+          type: string
+          format: date-time
+          description: Date of the run
+        qualityScore:
+          type: number
+          format: float
+          description: Quality score for the run
+        relevanceAccuracy:
+          type: number
+          format: float
+          description: Relevance accuracy for the run
+        totalItems:
+          type: integer
+          description: Total number of items in the run
+        modelUsed:
+          type: string
+          description: LLM model used for the run
+
+    PersonaMetricPoint:
+      type: object
+      required:
+        - personaName
+        - metrics
+      properties:
+        personaName:
+          type: string
+          description: Name of the persona
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricPoint'
+          description: Metrics for the persona over time
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: Error code
+        message:
+          type: string
+          description: Error message
+        details:
+          type: string
+          description: Additional error details 
