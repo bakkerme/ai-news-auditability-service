@@ -13,6 +13,7 @@ import (
 )
 
 var db *badger.DB
+var defaultRunDataTTL time.Duration
 
 const (
 	dbPathPrefix = "badger"
@@ -22,7 +23,7 @@ const (
 // InitDB initializes the BadgerDB database.
 // It creates the database directory if it doesn't exist.
 // It also sets up a goroutine for garbage collection.
-func InitDB(basePath string) error {
+func InitDB(basePath string, runDataTTLHours int) error {
 	dbDir := filepath.Join(basePath, dbPathPrefix)
 	if err := os.MkdirAll(dbDir, 0777); err != nil {
 		return fmt.Errorf("failed to create database directory %s: %w", dbDir, err)
@@ -35,6 +36,13 @@ func InitDB(basePath string) error {
 	db, err = badger.Open(opts)
 	if err != nil {
 		return fmt.Errorf("failed to open badger database: %w", err)
+	}
+
+	if runDataTTLHours > 0 {
+		defaultRunDataTTL = time.Duration(runDataTTLHours) * time.Hour
+		log.Printf("Run data TTL set to %v", defaultRunDataTTL)
+	} else {
+		log.Println("Run data TTL not set (or set to zero/negative), entries will not expire by default TTL.")
 	}
 
 	// Run GC periodically
@@ -89,7 +97,11 @@ func SaveRunData(runID string, data models.PersistedRunData) error {
 	}
 
 	err = db.Update(func(txn *badger.Txn) error {
-		return txn.Set(key, jsonData)
+		entry := badger.NewEntry(key, jsonData)
+		if defaultRunDataTTL > 0 {
+			entry = entry.WithTTL(defaultRunDataTTL)
+		}
+		return txn.SetEntry(entry)
 	})
 	if err != nil {
 		return fmt.Errorf("failed to save run data (ID: %s) to BadgerDB: %w", runID, err)

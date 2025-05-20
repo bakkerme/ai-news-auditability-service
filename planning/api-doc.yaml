@@ -70,6 +70,25 @@ paths:
                 items:
                   $ref: '#/components/schemas/RunMetadata'
 
+  /runs/latest:
+    get:
+      summary: Get latest run data
+      description: Get the full run data for the most recent run
+      operationId: getLatestRun
+      responses:
+        '200':
+          description: Latest run data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunData'
+        '404':
+          description: No runs found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /runs/{runId}:
     get:
       summary: Get run data
@@ -334,13 +353,13 @@ components:
           description: The date the run was executed
         overallModelUsed:
           type: string
-          description: The LLM model used for the run
+          description: The primary LLM model used for general text processing and entry summarization during the run. Typically configured via `ANP_LLM_MODEL`.
         imageModelUsed:
           type: string
-          description: The LLM model used for the image processing
+          description: The LLM model used for image processing. Typically configured via `ANP_LLM_IMAGE_MODEL`. If image processing is not enabled with a dedicated model, this field might reflect the `overallModelUsed` or be empty if not applicable.
         webContentModelUsed:
           type: string
-          description: The LLM model used for the web content processing
+          description: The LLM model used for summarizing external web content. In the current implementation, this uses the same model specified in `overallModelUsed` (derived from `ANP_LLM_MODEL`).
         totalProcessingTime:
           type: integer
           description: Total time taken for processing in milliseconds

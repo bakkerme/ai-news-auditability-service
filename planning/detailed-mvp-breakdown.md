@@ -21,7 +21,7 @@
 **Technology:**
 - **API Framework**: Echo (Go)
 
-### 3. Build base version with data storage
+### 3. Build base version with data storage (Done)
 **Subtasks:**
 - Set up BadgerDB connection and configuration
 - Implement data access layer for storage
@@ -41,6 +41,8 @@
 
 **Technology:**
 - **Frontend Framework**: Next.js
+
+**Detailed Plan:** See [MVP UI Planning](./ui-mvp-planning.md)
 
 ## Goal 2: Benchmark Web & Image Summarization dump acts as benchmark file
 

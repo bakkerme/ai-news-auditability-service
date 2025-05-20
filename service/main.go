@@ -2,8 +2,10 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 
+	"github.com/bakkerme/ai-news-auditability-service/internal"
 	"github.com/bakkerme/ai-news-auditability-service/internal/api"
 	"github.com/bakkerme/ai-news-auditability-service/internal/storage"
 
@@ -21,7 +23,13 @@ func main() {
 	}
 	dbStoragePath := basePath // Or customize this path, e.g., "./data"
 
-	if err := storage.InitDB(dbStoragePath); err != nil {
+	// Load configuration
+	spec, err := internal.GetConfig()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	if err := storage.InitDB(dbStoragePath, spec.RunDataTTLHours); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer storage.CloseDB()
@@ -32,8 +40,17 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
+	// CORS middleware
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: spec.CORSAllowedOrigins,
+		AllowMethods: []string{http.MethodGet, http.MethodHead, http.MethodPut, http.MethodPatch, http.MethodPost, http.MethodDelete},
+	}))
+
+	// Create API handler instance
+	apiHandler := api.NewAPI(spec)
+
 	// Routes
-	api.RegisterRoutes(e)
+	api.RegisterRoutes(e, apiHandler)
 
 	// Start server
 	log.Println("Starting server on :8080")
