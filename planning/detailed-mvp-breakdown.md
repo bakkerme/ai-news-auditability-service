@@ -1,6 +1,6 @@
 # MVP Task Breakdown
 
-## Goal 1: Service can collect, store and display most recent run
+## Goal 1: Service can collect, store and display most recent run (Done)
 
 ### 1. Separate and log prompt components (DONE) 
 **Subtasks:**  (ai-news-processor)
@@ -32,7 +32,7 @@
 - **Platform**: Docker + Alpine Linux
 - **Database**: BadgerDB
 
-### 4. Display basic UI for data
+### 4. Display basic UI for data (Done)
 **Subtasks:**
 - Design simple dashboard for viewing most recent run
 - Implement backend API endpoints for UI data
@@ -41,8 +41,6 @@
 
 **Technology:**
 - **Frontend Framework**: Next.js
-
-**Detailed Plan:** See [MVP UI Planning](./ui-mvp-planning.md)
 
 ## Goal 2: Benchmark Web & Image Summarization dump acts as benchmark file
 
