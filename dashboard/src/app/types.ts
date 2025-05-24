@@ -55,19 +55,19 @@ export interface SummaryResponse {
 }
 
 export interface RunData {
-  runId?: string; // Optional as it's not in the API schema for RunData but used in mock
+  runId: string;
   entrySummaries: EntrySummary[];
-  imageSummaries?: ImageSummary[];
-  webContentSummaries?: WebContentSummary[];
-  overallSummary?: SummaryResponse; // Added to sync with Go model
+  imageSummaries: ImageSummary[];
+  webContentSummaries: WebContentSummary[];
+  overallSummary: SummaryResponse; // Added to sync with Go model
   persona: Persona;
   runDate: string; // Assuming ISO string format from Go's time.Time
-  overallModelUsed?: string;
-  imageModelUsed?: string;
-  webContentModelUsed?: string;
-  totalProcessingTime?: number;
-  entryTotalProcessingTime?: number;
-  imageTotalProcessingTime?: number;
-  webContentTotalProcessingTime?: number;
+  overallModelUsed: string;
+  imageModelUsed: string;
+  webContentModelUsed: string;
+  totalProcessingTime: number;
+  entryTotalProcessingTime: number;
+  imageTotalProcessingTime: number;
+  webContentTotalProcessingTime: number;
   successRate?: number;
 } 

@@ -5,7 +5,7 @@ go 1.24.3
 replace github.com/bakkerme/ai-news-processor => ../../ai-news-processor
 
 require (
-	github.com/bakkerme/ai-news-processor v0.0.0-00010101000000-000000000000
+	github.com/bakkerme/ai-news-processor v0.0.0-20250523225949-28f02a8ce5a9
 	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/google/uuid v1.6.0
 	github.com/labstack/echo/v4 v4.13.3
@@ -26,6 +26,7 @@ require (
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/google/flatbuffers v1.12.1 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/grokify/html-strip-tags-go v0.1.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/klauspost/compress v1.17.2 // indirect
 	github.com/kr/pretty v0.3.1 // indirect

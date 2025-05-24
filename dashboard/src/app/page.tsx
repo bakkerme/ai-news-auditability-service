@@ -59,13 +59,7 @@ export default async function HomePage() {
     );
   }
   
-  const runId = "latest"; // Placeholder, as /runs/latest doesn't return a specific ID in its RunData body.
-
-  // Helper function to get image summaries for a specific entry
-  const getImageSummariesForEntry = (entryId: string) => {
-    if (!latestRun?.imageSummaries) return [];
-    return latestRun.imageSummaries.filter(imageSummary => imageSummary.entryID === entryId);
-  };
+  const runId = latestRun.runId; // Use the actual run ID from the API response
 
   return (
     <Layout>
