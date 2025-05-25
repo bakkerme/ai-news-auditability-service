@@ -2,9 +2,39 @@ export interface Item {
   id: string;
   title: string;
   summary: string;
-  commentSummary?: string; // Marked as optional as it may not always be present
-  imageDescription?: string; // Marked as optional as it may not always be present
+  commentSummary?: string;
+  imageDescription?: string;
+  webContentSummary?: string;
+  link?: string;
+  thumbnailUrl?: string;
   isRelevant: boolean;
+  entry: Entry;
+}
+
+export interface Entry {
+  title: string;
+  link: Link;
+  id: string;
+  published: string;
+  content: string;
+  comments: EntryComment[];
+  externalURLs: string[];
+  imageURLs: string[];
+  mediaThumbnail: MediaThumbnail;
+  imageDescription: string;
+  webContentSummaries: string[];
+}
+
+export interface EntryComment {
+  content: string;
+}
+
+export interface Link {
+  href: string;
+}
+
+export interface MediaThumbnail {
+  url: string;
 }
 
 export interface EntrySummary {

@@ -134,6 +134,7 @@ export default async function HomePage() {
                       <div className="bg-slate-50 dark:bg-slate-700 p-2 rounded text-slate-800 dark:text-slate-200"><span className="font-medium text-slate-600 dark:text-slate-400">ID:</span> {entry.results.id || "N/A"}</div>
                       <div className="bg-slate-50 dark:bg-slate-700 p-2 rounded text-slate-800 dark:text-slate-200"><span className="font-medium text-slate-600 dark:text-slate-400">Relevant:</span> {entry.results.isRelevant ? 'Yes' : 'No'}</div>
                       <div className="bg-slate-50 dark:bg-slate-700 p-2 rounded text-slate-800 dark:text-slate-200"><span className="font-medium text-slate-600 dark:text-slate-400">Processing Time:</span> {typeof entry.processingTimeMs === 'number' ? entry.processingTimeMs : "N/A"} ms</div>
+                      <div className="bg-slate-50 dark:bg-slate-700 p-2 rounded text-slate-800 dark:text-slate-200 col-span-full"><span className="font-medium text-slate-600 dark:text-slate-400">Link:</span> {entry.results.link || "N/A"}</div>
                     </div>
                   </div>
                   <TruncatableContent title="Raw Input" content={entry.rawInput || ""} />
@@ -143,6 +144,9 @@ export default async function HomePage() {
                   )}
                   {entry.results.imageDescription && (  
                     <TruncatableContent title="Image Description" content={entry.results.imageDescription || ""} initialLineLimit={5} />
+                  )}
+                  {entry.results.webContentSummary && (  
+                    <TruncatableContent title="Web Content Summary" content={entry.results.webContentSummary || ""} initialLineLimit={5} />
                   )}
                 </div>
               </AccordionItem>

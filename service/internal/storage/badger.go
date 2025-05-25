@@ -173,7 +173,7 @@ func ListRunMetadata(limit int) ([]models.RunMetadata, error) {
 				// consider storing metadata separately or in a more queryable format.
 				if err := json.Unmarshal(val, &runData); err != nil {
 					// Log error but try to continue if possible, or return error to stop.
-					log.Printf("Error unmarshalling RunData for key %s: %v", string(item.Key()), err)
+					log.Printf("error unmarshalling RunData for key %s: %v", string(item.Key()), err)
 					return nil // Skip this item
 				}
 

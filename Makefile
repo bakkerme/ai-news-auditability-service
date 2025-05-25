@@ -6,3 +6,7 @@ RunServiceDevAir:
 
 RunServiceDev:
 	cd service && go run main.go
+
+ClearBadgerDB:
+	rm -rf ./service/badger
+
