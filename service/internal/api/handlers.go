@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bakkerme/ai-news-auditability-service/internal"
+	"github.com/bakkerme/ai-news-auditability-service/internal/benchmark"
 	"github.com/bakkerme/ai-news-auditability-service/internal/models"
 	"github.com/bakkerme/ai-news-auditability-service/internal/storage"
 
@@ -18,13 +19,23 @@ import (
 
 // API holds dependencies for API handlers.
 type API struct {
-	spec *internal.Specification
-	// Add other dependencies like a database connection here if needed
+	spec            *internal.Specification
+	benchmarkService *benchmark.BenchmarkService
 }
 
 // NewAPI creates a new API handler instance.
 func NewAPI(s *internal.Specification) *API {
-	return &API{spec: s}
+	// Initialize benchmark service with LLM configuration from spec
+	benchmarkService := benchmark.NewBenchmarkService(
+		s.LlmURL,
+		s.LlmAPIKey,
+		s.LlmModel,
+	)
+	
+	return &API{
+		spec:            s,
+		benchmarkService: benchmarkService,
+	}
 }
 
 // SubmitRun handles POST /runs
@@ -133,57 +144,36 @@ func (h *API) GetLatestRun(c echo.Context) error {
 
 // CreateBenchmark handles POST /benchmarks/create/{runId}
 func (h *API) CreateBenchmark(c echo.Context) error {
-	runID := c.Param("runId") // runID is available for use in TODO logic
-	// TODO: Implement benchmark creation logic, associate with runID
-
-	// Dummy response for now
-	if runID == "run-to-fail-benchmark-creation" { // Simulate a scenario
-		return c.JSON(http.StatusNotFound, models.Error{Code: http.StatusNotFound, Message: "Run not found, cannot create benchmark"})
+	runID := c.Param("runId")
+	
+	// Create benchmark using the benchmark service
+	response, err := h.benchmarkService.CreateBenchmark(runID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return c.JSON(http.StatusNotFound, models.Error{Code: http.StatusNotFound, Message: fmt.Sprintf("Run with ID '%s' not found", runID)})
+		}
+		log.Printf("Error creating benchmark for run ID %s: %v", runID, err)
+		return c.JSON(http.StatusInternalServerError, models.Error{Code: http.StatusInternalServerError, Message: "Failed to create benchmark: " + err.Error()})
 	}
 
-	response := models.BenchmarkResponse{
-		ID:      uuid.NewString(), // Changed from BenchmarkID, RunID removed
-		Message: "Benchmark triggered successfully",
-		Status:  "pending", // Timestamp removed, EstimatedCompletionTime can be added when known
-	}
 	return c.JSON(http.StatusAccepted, response)
 }
 
 // GetBenchmark handles GET /benchmarks/{runId}
 func (h *API) GetBenchmark(c echo.Context) error {
 	runID := c.Param("runId")
-	// TODO: Implement benchmark results retrieval logic for the given runID
-
-	// Dummy response for now
-	if runID == "nonexistent-benchmark" { // Simulate not found
-		return c.JSON(http.StatusNotFound, models.Error{Code: http.StatusNotFound, Message: "Benchmark not found"})
+	
+	// Get benchmark results using the benchmark service
+	results, err := h.benchmarkService.GetBenchmarkResults(runID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return c.JSON(http.StatusNotFound, models.Error{Code: http.StatusNotFound, Message: fmt.Sprintf("Benchmark results for run ID '%s' not found", runID)})
+		}
+		log.Printf("Error getting benchmark results for run ID %s: %v", runID, err)
+		return c.JSON(http.StatusInternalServerError, models.Error{Code: http.StatusInternalServerError, Message: "Failed to retrieve benchmark results: " + err.Error()})
 	}
 
-	dummyResults := models.BenchmarkResults{
-		// Fields from the current model definition
-		TotalItems:        10,
-		RelevanceAccuracy: 0.85,
-		QualityScore:      0.92,
-		DetailedEvaluations: map[string]models.EvaluationResult{
-			"item123": {
-				QualityRating:        "Good",
-				QualityExplanation:   "Summary was concise and accurate.",
-				RelevanceCorrect:     true,
-				RelevanceExplanation: "Item was correctly marked as relevant.",
-			},
-		},
-		PersonaName:       "TestPersonaForBenchmark",
-		PersonaFocusAreas: []string{"testing", "benchmarking"},
-		MissingItems:      []string{"item456"},
-
-		// Fields from previous simpler version (kept as they are in the Go struct)
-		BenchmarkID: uuid.NewString(),               // This could be the ID of the benchmark job
-		RunID:       runID,                          // The ID of the run that was benchmarked
-		Timestamp:   time.Now().Add(-1 * time.Hour), // Time of results generation
-		Judgement:   "The summary is good overall.",
-		// Status and Scores fields removed as they are not in the current struct definition
-	}
-	return c.JSON(http.StatusOK, dummyResults)
+	return c.JSON(http.StatusOK, results)
 }
 
 // GetBenchmarkLogs handles GET /benchmarks/{runId}/logs

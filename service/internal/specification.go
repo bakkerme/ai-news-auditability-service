@@ -10,6 +10,9 @@ import (
 type Specification struct {
 	RunDataTTLHours    int      `mapstructure:"RUN_DATA_TTL_HOURS"`
 	CORSAllowedOrigins []string `mapstructure:"CORS_ALLOWED_ORIGINS"`
+	LlmURL             string   `mapstructure:"LLM_URL"`
+	LlmAPIKey          string   `mapstructure:"LLM_API_KEY"`
+	LlmModel           string   `mapstructure:"LLM_MODEL"`
 }
 
 // Validate checks if the specification is valid
@@ -27,6 +30,9 @@ func GetConfig() (*Specification, error) {
 	// Set default values
 	v.SetDefault("RUN_DATA_TTL_HOURS", 168) // 7 days
 	v.SetDefault("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000"})
+	v.SetDefault("LLM_URL", "")
+	v.SetDefault("LLM_API_KEY", "")
+	v.SetDefault("LLM_MODEL", "gpt-4")
 
 	// Configure Viper to read from .env file
 	v.SetConfigName(".env") // Name of config file (without extension)

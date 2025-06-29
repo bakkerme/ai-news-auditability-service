@@ -16,8 +16,9 @@ var db *badger.DB
 var defaultRunDataTTL time.Duration
 
 const (
-	dbPathPrefix = "badger"
-	runDataDir   = "rundata"
+	dbPathPrefix   = "badger"
+	runDataDir     = "rundata"
+	benchmarkDir   = "benchmarks"
 )
 
 // InitDB initializes the BadgerDB database.
@@ -228,4 +229,119 @@ func DeleteRunData(runID string) error {
 	}
 	log.Printf("Successfully deleted run data with ID (if it existed): %s", runID)
 	return nil
+}
+
+// SaveBenchmarkResults saves benchmark results to BadgerDB
+func SaveBenchmarkResults(benchmarkID string, results models.BenchmarkResults) error {
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	key := []byte(fmt.Sprintf("%s/%s", benchmarkDir, benchmarkID))
+
+	jsonData, err := json.Marshal(results)
+	if err != nil {
+		return fmt.Errorf("failed to marshal benchmark results to JSON: %w", err)
+	}
+
+	err = db.Update(func(txn *badger.Txn) error {
+		entry := badger.NewEntry(key, jsonData)
+		if defaultRunDataTTL > 0 {
+			entry = entry.WithTTL(defaultRunDataTTL)
+		}
+		return txn.SetEntry(entry)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to save benchmark results (ID: %s) to BadgerDB: %w", benchmarkID, err)
+	}
+	log.Printf("Successfully saved benchmark results with ID: %s", benchmarkID)
+	return nil
+}
+
+// GetBenchmarkResults retrieves benchmark results from BadgerDB by run ID
+// Note: This searches for benchmark results associated with a run ID
+func GetBenchmarkResults(runID string) (*models.BenchmarkResults, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	keyPrefix := []byte(fmt.Sprintf("%s/", benchmarkDir))
+	var results *models.BenchmarkResults
+
+	err := db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+
+		for it.Seek(keyPrefix); it.ValidForPrefix(keyPrefix); it.Next() {
+			item := it.Item()
+			err := item.Value(func(val []byte) error {
+				var benchmarkResults models.BenchmarkResults
+				if err := json.Unmarshal(val, &benchmarkResults); err != nil {
+					log.Printf("error unmarshalling benchmark results for key %s: %v", string(item.Key()), err)
+					return nil // Skip this item
+				}
+
+				// Check if this benchmark is for the requested run ID
+				if benchmarkResults.RunID == runID {
+					results = &benchmarkResults
+					return nil
+				}
+				return nil
+			})
+			if err != nil {
+				return fmt.Errorf("error processing benchmark item value: %w", err)
+			}
+			
+			// If we found results, break out of the loop
+			if results != nil {
+				break
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get benchmark results for run ID %s: %w", runID, err)
+	}
+
+	if results == nil {
+		return nil, fmt.Errorf("benchmark results for run ID '%s' not found", runID)
+	}
+
+	return results, nil
+}
+
+// GetBenchmarkResultsByBenchmarkID retrieves benchmark results by benchmark ID
+func GetBenchmarkResultsByBenchmarkID(benchmarkID string) (*models.BenchmarkResults, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	key := []byte(fmt.Sprintf("%s/%s", benchmarkDir, benchmarkID))
+	var results models.BenchmarkResults
+
+	err := db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		if err != nil {
+			if err == badger.ErrKeyNotFound {
+				return fmt.Errorf("benchmark results with ID '%s' not found: %w", benchmarkID, err)
+			}
+			return fmt.Errorf("failed to get benchmark results (ID: %s) from BadgerDB: %w", benchmarkID, err)
+		}
+
+		val, err := item.ValueCopy(nil)
+		if err != nil {
+			return fmt.Errorf("failed to copy value for benchmark results (ID: %s): %w", benchmarkID, err)
+		}
+
+		if err := json.Unmarshal(val, &results); err != nil {
+			return fmt.Errorf("failed to unmarshal benchmark results (ID: %s) from JSON: %w", benchmarkID, err)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return &results, nil
 }

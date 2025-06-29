@@ -1,2 +1,3 @@
 badger/
 tmp/
+.env
